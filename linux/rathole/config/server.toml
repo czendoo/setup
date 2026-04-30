@@ -6,4 +6,4 @@ bind_addr = "0.0.0.0:7251"
 default_token = "change-this-token"
 
 [server.services.rdp]
-bind_addr = "0.0.0.0:8251"
+bind_addr = "10.44.0.1:8251"
