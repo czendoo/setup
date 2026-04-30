@@ -16,8 +16,8 @@ WG_INTERFACE="${WG_INTERFACE:-wg0}"
 
 if [[ -n "${WG_PORT:-}" ]]; then
     WG_PORT="${WG_PORT}"
-elif [[ -t 0 ]]; then
-    read -r -p "WireGuard UDP port [51820]: " WG_PORT
+elif [[ -r /dev/tty ]]; then
+    read -r -p "WireGuard UDP port [51820]: " WG_PORT < /dev/tty
     WG_PORT="${WG_PORT:-51820}"
 else
     WG_PORT="51820"
