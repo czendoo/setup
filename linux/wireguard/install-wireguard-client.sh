@@ -36,6 +36,9 @@ fi
 WG_CONFIG_DIR="/etc/wireguard"
 TARGET_CONFIG="${WG_CONFIG_DIR}/${INTERFACE_NAME}.conf"
 
+SOURCE_CONFIG_RESOLVED="$(readlink -f "${SOURCE_CONFIG}")"
+TARGET_CONFIG_RESOLVED="$(readlink -m "${TARGET_CONFIG}")"
+
 export DEBIAN_FRONTEND=noninteractive
 
 echo "Installing WireGuard packages..."
@@ -43,7 +46,12 @@ apt-get update
 apt-get install -y wireguard wireguard-tools resolvconf
 
 install -d -m 0700 "${WG_CONFIG_DIR}"
-install -m 0600 "${SOURCE_CONFIG}" "${TARGET_CONFIG}"
+
+if [[ "${SOURCE_CONFIG_RESOLVED}" != "${TARGET_CONFIG_RESOLVED}" ]]; then
+    install -m 0600 "${SOURCE_CONFIG}" "${TARGET_CONFIG}"
+else
+    chmod 600 "${TARGET_CONFIG}"
+fi
 
 if systemctl is-active --quiet "wg-quick@${INTERFACE_NAME}"; then
     systemctl restart "wg-quick@${INTERFACE_NAME}"
