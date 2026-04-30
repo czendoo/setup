@@ -1,0 +1,9 @@
+# RatHole client config.
+# Set remote_addr to your Hetzner server and edit local_addr if RDP is not on 127.0.0.1:3389.
+
+[client]
+remote_addr = "YOUR_HETZNER_SERVER_IP:7251"
+default_token = "change-this-token"
+
+[client.services.rdp]
+local_addr = "127.0.0.1:3389"

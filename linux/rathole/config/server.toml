@@ -1,0 +1,9 @@
+# Public RatHole server config.
+# The client must use the same default_token value.
+
+[server]
+bind_addr = "0.0.0.0:7251"
+default_token = "change-this-token"
+
+[server.services.rdp]
+bind_addr = "0.0.0.0:8251"
