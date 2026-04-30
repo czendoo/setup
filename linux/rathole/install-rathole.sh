@@ -32,7 +32,7 @@ SOURCE_ROOT="${INSTALL_ROOT}/src"
 RATHOLE_REPO="${SOURCE_ROOT}/rathole"
 CONFIG_ROOT="/etc/rathole"
 CONFIG_TARGET="${CONFIG_ROOT}/${ROLE}.toml"
-SERVICE_NAME="rathole-${ROLE}.service"
+SERVICE_NAME="rathole.service"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}"
 
 if [[ ! -f "$CONFIG_SOURCE" ]]; then

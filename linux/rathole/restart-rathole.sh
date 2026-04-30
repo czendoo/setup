@@ -7,14 +7,8 @@ if [[ "${EUID}" -ne 0 ]]; then
     exit 1
 fi
 
-if [[ $# -ne 1 ]]; then
-    echo "Usage: $0 <server|client>" >&2
-    exit 1
-fi
-
-ROLE="$1"
-if [[ "$ROLE" != "server" && "$ROLE" != "client" ]]; then
-    echo "Role must be either 'server' or 'client'." >&2
+if [[ $# -ne 0 ]]; then
+    echo "Usage: $0" >&2
     exit 1
 fi
 
@@ -23,14 +17,20 @@ if ! command -v systemctl >/dev/null 2>&1; then
     exit 1
 fi
 
-SERVICE_NAME="rathole-${ROLE}.service"
+SERVICE_NAME=""
+for candidate in rathole.service rathole-client.service rathole-server.service; do
+    if systemctl list-unit-files --type=service | grep -q "^${candidate}"; then
+        SERVICE_NAME="$candidate"
+        break
+    fi
+done
 
-if ! systemctl list-unit-files --type=service | grep -q "^${SERVICE_NAME}"; then
-    echo "Service ${SERVICE_NAME} is not installed." >&2
+if [[ -z "$SERVICE_NAME" ]]; then
+    echo "No RatHole service is installed." >&2
     exit 1
 fi
 
 systemctl restart "$SERVICE_NAME"
 
-echo "RatHole ${ROLE} restarted."
+echo "RatHole restarted."
 echo "Status: systemctl status ${SERVICE_NAME}"
