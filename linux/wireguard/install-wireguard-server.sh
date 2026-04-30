@@ -13,7 +13,16 @@ if ! command -v apt-get >/dev/null 2>&1; then
 fi
 
 WG_INTERFACE="${WG_INTERFACE:-wg0}"
-WG_PORT="${WG_PORT:-51820}"
+
+if [[ -n "${WG_PORT:-}" ]]; then
+    WG_PORT="${WG_PORT}"
+elif [[ -t 0 ]]; then
+    read -r -p "WireGuard UDP port [51820]: " WG_PORT
+    WG_PORT="${WG_PORT:-51820}"
+else
+    WG_PORT="51820"
+fi
+
 WG_SERVER_CIDR="${WG_SERVER_CIDR:-10.44.0.1/24}"
 WG_SERVER_IP="${WG_SERVER_CIDR%%/*}"
 WG_NETWORK_CIDR="${WG_SERVER_IP%.*}.0/24"
