@@ -32,19 +32,26 @@ PEER_PRIVATE_KEY_FILE="${PEER_DIR}/${PEER_NAME}.key"
 PEER_PUBLIC_KEY_FILE="${PEER_DIR}/${PEER_NAME}.pub"
 PEER_CONFIG_FILE="${PEER_DIR}/${PEER_NAME}.conf"
 
+PEER_EXISTS=false
 if [[ -d "${PEER_DIR}" ]]; then
-    echo "Peer '${PEER_NAME}' already exists." >&2
-    exit 1
+    PEER_EXISTS=true
+    if [[ ! -f "${PEER_PRIVATE_KEY_FILE}" || ! -f "${PEER_PUBLIC_KEY_FILE}" ]]; then
+        echo "Peer '${PEER_NAME}' exists but its key files are missing." >&2
+        exit 1
+    fi
+else
+    install -d -m 0700 "${PEER_DIR}"
 fi
 
-install -d -m 0700 "${PEER_DIR}"
-
-umask 077
-wg genkey | tee "${PEER_PRIVATE_KEY_FILE}" | wg pubkey > "${PEER_PUBLIC_KEY_FILE}"
+if [[ "${PEER_EXISTS}" == false ]]; then
+    umask 077
+    wg genkey | tee "${PEER_PRIVATE_KEY_FILE}" | wg pubkey > "${PEER_PUBLIC_KEY_FILE}"
+fi
 
 PEER_PRIVATE_KEY="$(<"${PEER_PRIVATE_KEY_FILE}")"
 PEER_PUBLIC_KEY="$(<"${PEER_PUBLIC_KEY_FILE}")"
 
+if ! grep -Fq "# ${PEER_NAME}" "${WG_CONFIG_FILE}"; then
 cat >> "${WG_CONFIG_FILE}" <<EOF
 
 [Peer]
@@ -52,6 +59,7 @@ cat >> "${WG_CONFIG_FILE}" <<EOF
 PublicKey = ${PEER_PUBLIC_KEY}
 AllowedIPs = ${CLIENT_IP}/32
 EOF
+fi
 
 cat > "${PEER_CONFIG_FILE}" <<EOF
 [Interface]
@@ -71,7 +79,11 @@ chmod 600 "${PEER_PRIVATE_KEY_FILE}" "${PEER_PUBLIC_KEY_FILE}" "${PEER_CONFIG_FI
 systemctl restart "wg-quick@${WG_INTERFACE}"
 
 echo
-echo "Peer '${PEER_NAME}' added."
+if [[ "${PEER_EXISTS}" == true ]]; then
+    echo "Peer '${PEER_NAME}' config updated."
+else
+    echo "Peer '${PEER_NAME}' added."
+fi
 echo "Client config: ${PEER_CONFIG_FILE}"
 echo
 echo "QR code:"
