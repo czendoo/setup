@@ -116,6 +116,33 @@ backup_file_if_exists() {
     run_cmd cp "${file_path}" "${file_path}.bak.${BACKUP_STAMP}"
 }
 
+build_ssh_hardening_content() {
+    local admin_user="$1"
+    local ssh_port="$2"
+    local permit_root_login="no"
+    local allow_users_line="AllowUsers ${admin_user}"
+
+    if [[ "${admin_user}" == "root" ]]; then
+        # Root-only hosts can still be hardened safely if root is limited to SSH keys.
+        permit_root_login="prohibit-password"
+    fi
+
+    cat <<EOF
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+ChallengeResponseAuthentication no
+PubkeyAuthentication yes
+PermitRootLogin ${permit_root_login}
+${allow_users_line}
+Port ${ssh_port}
+LoginGraceTime 30
+MaxAuthTries 3
+ClientAliveInterval 300
+ClientAliveCountMax 2
+X11Forwarding no
+EOF
+}
+
 service_enable_now() {
     local service_name="$1"
 
@@ -400,21 +427,7 @@ backup_file_if_exists "${FAIL2BAN_JAIL_FILE}"
 backup_file_if_exists "${AUTO_UPGRADES_FILE}"
 backup_file_if_exists "${JOURNALD_FILE}"
 
-ssh_hardening_content=$(cat <<EOF
-PasswordAuthentication no
-KbdInteractiveAuthentication no
-ChallengeResponseAuthentication no
-PubkeyAuthentication yes
-PermitRootLogin no
-AllowUsers ${ADMIN_USER}
-Port ${SSH_PORT}
-LoginGraceTime 30
-MaxAuthTries 3
-ClientAliveInterval 300
-ClientAliveCountMax 2
-X11Forwarding no
-EOF
-)
+ssh_hardening_content="$(build_ssh_hardening_content "${ADMIN_USER}" "${SSH_PORT}")"
 
 fail2ban_content=$(cat <<EOF
 [sshd]
