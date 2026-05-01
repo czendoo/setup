@@ -12,6 +12,60 @@ if ! command -v apt-get >/dev/null 2>&1; then
     exit 1
 fi
 
+usage() {
+    cat >&2 <<'EOF'
+Usage: install-wireguard-server.sh <server-cidr>
+Example: install-wireguard-server.sh 10.44.0.1/24
+EOF
+}
+
+ipv4_network_from_cidr() {
+    local cidr="$1"
+    local ip prefix o1 o2 o3 o4 octet ip_int mask network
+
+    if [[ ! "${cidr}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]|[12][0-9]|3[0-2])$ ]]; then
+        echo "Invalid IPv4 CIDR: ${cidr}" >&2
+        return 1
+    fi
+
+    IFS=/ read -r ip prefix <<< "${cidr}"
+    IFS=. read -r o1 o2 o3 o4 <<< "${ip}"
+
+    for octet in "${o1}" "${o2}" "${o3}" "${o4}"; do
+        if (( octet < 0 || octet > 255 )); then
+            echo "Invalid IPv4 CIDR: ${cidr}" >&2
+            return 1
+        fi
+    done
+
+    ip_int=$(( (o1 << 24) | (o2 << 16) | (o3 << 8) | o4 ))
+
+    if (( prefix == 0 )); then
+        mask=0
+    else
+        mask=$(( (0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF ))
+    fi
+
+    network=$(( ip_int & mask ))
+
+    printf '%d.%d.%d.%d/%d\n' \
+        $(( (network >> 24) & 255 )) \
+        $(( (network >> 16) & 255 )) \
+        $(( (network >> 8) & 255 )) \
+        $(( network & 255 )) \
+        "${prefix}"
+}
+
+if [[ $# -ne 1 ]]; then
+    usage
+    exit 1
+fi
+
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    usage
+    exit 0
+fi
+
 WG_INTERFACE="${WG_INTERFACE:-wg0}"
 
 if [[ -n "${WG_PORT:-}" ]]; then
@@ -23,9 +77,9 @@ else
     WG_PORT="51820"
 fi
 
-WG_SERVER_CIDR="${WG_SERVER_CIDR:-10.44.0.1/24}"
+WG_SERVER_CIDR="$1"
 WG_SERVER_IP="${WG_SERVER_CIDR%%/*}"
-WG_NETWORK_CIDR="${WG_SERVER_IP%.*}.0/24"
+WG_NETWORK_CIDR="$(ipv4_network_from_cidr "${WG_SERVER_CIDR}")"
 WG_CONFIG_DIR="/etc/wireguard"
 WG_CONFIG_FILE="${WG_CONFIG_DIR}/${WG_INTERFACE}.conf"
 WG_PARAMS_FILE="${WG_CONFIG_DIR}/${WG_INTERFACE}.env"
@@ -42,6 +96,11 @@ if [[ -z "${PUBLIC_INTERFACE}" ]]; then
 fi
 
 export DEBIAN_FRONTEND=noninteractive
+
+if systemctl is-active --quiet "wg-quick@${WG_INTERFACE}"; then
+    echo "Stopping existing WireGuard interface..."
+    systemctl stop "wg-quick@${WG_INTERFACE}"
+fi
 
 echo "Installing WireGuard packages..."
 apt-get update
