@@ -14,8 +14,8 @@ fi
 
 usage() {
     cat >&2 <<'EOF'
-Usage: install-wireguard-server.sh <server-cidr>
-Example: install-wireguard-server.sh 10.44.0.1/24
+Usage: install-wireguard-server.sh <server-cidr> <listen-port>
+Example: install-wireguard-server.sh 10.44.0.1/24 51888
 EOF
 }
 
@@ -56,7 +56,16 @@ ipv4_network_from_cidr() {
         "${prefix}"
 }
 
-if [[ $# -ne 1 ]]; then
+validate_port() {
+    local port="$1"
+
+    if [[ ! "${port}" =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
+        echo "Invalid listen port: ${port}" >&2
+        return 1
+    fi
+}
+
+if [[ $# -ne 2 ]]; then
     usage
     exit 1
 fi
@@ -68,16 +77,9 @@ fi
 
 WG_INTERFACE="${WG_INTERFACE:-wg0}"
 
-if [[ -n "${WG_PORT:-}" ]]; then
-    WG_PORT="${WG_PORT}"
-elif [[ -r /dev/tty ]]; then
-    read -r -p "WireGuard UDP port [51820]: " WG_PORT < /dev/tty
-    WG_PORT="${WG_PORT:-51820}"
-else
-    WG_PORT="51820"
-fi
-
 WG_SERVER_CIDR="$1"
+WG_PORT="$2"
+validate_port "${WG_PORT}"
 WG_SERVER_IP="${WG_SERVER_CIDR%%/*}"
 WG_NETWORK_CIDR="$(ipv4_network_from_cidr "${WG_SERVER_CIDR}")"
 WG_CONFIG_DIR="/etc/wireguard"
