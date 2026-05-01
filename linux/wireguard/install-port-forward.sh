@@ -2,6 +2,24 @@
 
 set -euo pipefail
 
+print_available_interfaces() {
+    local wg_config_dir="/etc/wireguard"
+    local found=false
+
+    shopt -s nullglob
+    for conf_file in "${wg_config_dir}"/*.conf; do
+        if [[ -f "${conf_file}" ]]; then
+            found=true
+            echo "- $(basename "${conf_file}" .conf)"
+        fi
+    done
+    shopt -u nullglob
+
+    if [[ "${found}" == false ]]; then
+        echo "- none found under ${wg_config_dir}"
+    fi
+}
+
 if [[ "${EUID}" -ne 0 ]]; then
     echo "Run this script as root." >&2
     exit 1
@@ -10,6 +28,13 @@ fi
 if [[ $# -lt 4 || $# -gt 4 ]]; then
     echo "Usage: $0 <windows-lan-ip> <listen-port> <interface-name> <target-port>" >&2
     echo "Example: $0 192.168.1.50 3389 rpi 3389" >&2
+
+    if [[ $# -eq 0 ]]; then
+        echo >&2
+        echo "Available WireGuard interfaces:" >&2
+        print_available_interfaces >&2
+    fi
+
     exit 1
 fi
 
