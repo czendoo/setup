@@ -170,11 +170,150 @@ validate_port() {
     (( port >= 1 && port <= 65535 ))
 }
 
+validate_user_name() {
+    local user_name="$1"
+
+    [[ "${user_name}" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]]
+}
+
+prompt_yes_no() {
+    local prompt_message="$1"
+    local answer=""
+
+    while true; do
+        read -r -p "${prompt_message} [y/n]: " answer
+        case "${answer}" in
+            y|Y|yes|YES)
+                return 0
+                ;;
+            n|N|no|NO)
+                return 1
+                ;;
+        esac
+    done
+}
+
+prompt_password_for_user() {
+    local user_name="$1"
+    local first_password=""
+    local second_password=""
+
+    while true; do
+        read -r -s -p "Enter the password for ${user_name}: " first_password
+        echo
+        read -r -s -p "Confirm the password for ${user_name}: " second_password
+        echo
+
+        if [[ -z "${first_password}" ]]; then
+            echo "Password cannot be empty." >&2
+            continue
+        fi
+
+        if [[ "${first_password}" != "${second_password}" ]]; then
+            echo "Passwords do not match. Try again." >&2
+            continue
+        fi
+
+        printf '%s\n' "${first_password}"
+        return 0
+    done
+}
+
+ensure_user_home_ssh_dir() {
+    local user_name="$1"
+    local home_dir
+
+    home_dir="$(getent passwd "${user_name}" | cut -d: -f6)"
+    if [[ -z "${home_dir}" ]]; then
+        echo "Could not determine home directory for '${user_name}'." >&2
+        exit 1
+    fi
+
+    run_cmd install -d -m 0700 -o "${user_name}" -g "${user_name}" "${home_dir}/.ssh"
+    printf '%s\n' "${home_dir}"
+}
+
+merge_root_authorized_keys() {
+    local user_name="$1"
+    local home_dir="$2"
+    local root_authorized_keys="/root/.ssh/authorized_keys"
+    local target_authorized_keys="${home_dir}/.ssh/authorized_keys"
+    local line=""
+
+    if [[ ! -f "${root_authorized_keys}" ]]; then
+        echo "No ${root_authorized_keys} file found. Skipping SSH key copy."
+        return 0
+    fi
+
+    if [[ "${DRY_RUN}" == true ]]; then
+        echo "DRY-RUN: merge ${root_authorized_keys} into ${target_authorized_keys}"
+        return 0
+    fi
+
+    touch "${target_authorized_keys}"
+    chmod 600 "${target_authorized_keys}"
+
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+        [[ -n "${line}" ]] || continue
+        if ! grep -Fqx "${line}" "${target_authorized_keys}"; then
+            printf '%s\n' "${line}" >> "${target_authorized_keys}"
+        fi
+    done < "${root_authorized_keys}"
+
+    chown "${user_name}:${user_name}" "${target_authorized_keys}"
+}
+
+create_admin_user() {
+    local user_name="$1"
+    local user_password=""
+    local user_home=""
+
+    if ! validate_user_name "${user_name}"; then
+        echo "Invalid user name: ${user_name}" >&2
+        exit 1
+    fi
+
+    if [[ "${user_name}" == "root" ]]; then
+        echo "Refusing to create root. Choose a non-root user name." >&2
+        exit 1
+    fi
+
+    if [[ "${DRY_RUN}" == true ]]; then
+        echo "DRY-RUN: apt-get update"
+        echo "DRY-RUN: apt-get install -y sudo"
+        echo "DRY-RUN: useradd -m -s /bin/bash ${user_name}"
+        echo "DRY-RUN: prompt for password and add ${user_name} to sudo group"
+        echo "DRY-RUN: copy /root/.ssh/authorized_keys to ${user_name}"
+        return 0
+    fi
+
+    user_password="$(prompt_password_for_user "${user_name}")"
+
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y sudo
+
+    echo "Creating user '${user_name}'..."
+    useradd -m -s /bin/bash "${user_name}"
+    printf '%s:%s\n' "${user_name}" "${user_password}" | chpasswd
+
+    echo "Adding '${user_name}' to sudo group..."
+    usermod -aG sudo "${user_name}"
+
+    user_home="$(ensure_user_home_ssh_dir "${user_name}")"
+    echo "Copying root SSH authorized keys to ${user_home}/.ssh/authorized_keys..."
+    merge_root_authorized_keys "${user_name}" "${user_home}"
+}
+
 require_existing_user() {
     local user_name="$1"
 
     if ! id "${user_name}" >/dev/null 2>&1; then
         echo "User '${user_name}' does not exist." >&2
+        if prompt_yes_no "Create '${user_name}' now with sudo access and root SSH keys copied"; then
+            create_admin_user "${user_name}"
+            return 0
+        fi
         exit 1
     fi
 }
