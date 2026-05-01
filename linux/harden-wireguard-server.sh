@@ -172,6 +172,12 @@ validate_port() {
     (( port >= 1 && port <= 65535 ))
 }
 
+normalize_port() {
+    local port="$1"
+
+    printf '%s' "${port}" | tr -d '[:space:]'
+}
+
 validate_user_name() {
     local user_name="$1"
 
@@ -556,10 +562,13 @@ require_authorized_keys "${ADMIN_USER}"
 if [[ -z "${SSH_PORT}" ]]; then
     detected_ssh_port="$(detect_ssh_port)"
     if [[ -n "${detected_ssh_port}" ]]; then
+        detected_ssh_port="$(normalize_port "${detected_ssh_port}")"
         echo "Detected SSH port: ${detected_ssh_port}"
     fi
     SSH_PORT="$(prompt_required_value "Enter the SSH port to preserve or configure")"
 fi
+
+SSH_PORT="$(normalize_port "${SSH_PORT}")"
 
 if ! validate_port "${SSH_PORT}"; then
     echo "Invalid SSH port: ${SSH_PORT}" >&2
@@ -587,7 +596,10 @@ if [[ -z "${detected_wg_port}" ]]; then
     detected_wg_port="$(detect_wg_port_from_runtime "${WG_INTERFACE}")"
 fi
 
+detected_wg_port="$(normalize_port "${detected_wg_port}")"
+
 if [[ -n "${WG_PORT}" ]]; then
+    WG_PORT="$(normalize_port "${WG_PORT}")"
     if ! validate_port "${WG_PORT}"; then
         echo "Invalid WireGuard UDP port: ${WG_PORT}" >&2
         exit 1
@@ -599,6 +611,13 @@ if [[ -n "${WG_PORT}" ]]; then
     fi
 else
     WG_PORT="$(prompt_wg_port_confirmation "${detected_wg_port}")"
+fi
+
+WG_PORT="$(normalize_port "${WG_PORT}")"
+
+if ! validate_port "${WG_PORT}"; then
+    echo "Invalid normalized WireGuard UDP port: ${WG_PORT}" >&2
+    exit 1
 fi
 
 export DEBIAN_FRONTEND=noninteractive
@@ -652,7 +671,9 @@ write_file "${AUTO_UPGRADES_FILE}" 0644 "${auto_upgrades_content}"
 write_file "${JOURNALD_FILE}" 0644 "${journald_content}"
 
 echo "Applying firewall policy..."
+echo "Allowing SSH rule: ${SSH_PORT}/tcp"
 run_cmd ufw allow "${SSH_PORT}/tcp"
+echo "Allowing WireGuard rule: ${WG_PORT}/udp"
 run_cmd ufw allow "${WG_PORT}/udp"
 run_cmd ufw default deny incoming
 run_cmd ufw default allow outgoing
