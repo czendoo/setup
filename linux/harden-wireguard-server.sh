@@ -323,7 +323,7 @@ require_authorized_keys() {
     local home_dir
     local auth_keys
 
-    home_dir="$(getent passwd "${user_name}" | cut -d: -f6)"
+    home_dir="$(ensure_user_home_ssh_dir "${user_name}")"
     if [[ -z "${home_dir}" ]]; then
         echo "Could not determine home directory for '${user_name}'." >&2
         exit 1
@@ -332,6 +332,12 @@ require_authorized_keys() {
     auth_keys="${home_dir}/.ssh/authorized_keys"
     if [[ ! -s "${auth_keys}" ]]; then
         echo "Missing or empty authorized_keys for '${user_name}' at ${auth_keys}." >&2
+        echo "Copying root SSH authorized keys into '${user_name}'..."
+        merge_root_authorized_keys "${user_name}" "${home_dir}"
+    fi
+
+    if [[ ! -s "${auth_keys}" ]]; then
+        echo "No authorized_keys available for '${user_name}' after the copy step." >&2
         exit 1
     fi
 }
