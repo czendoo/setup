@@ -43,6 +43,41 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+read_sshd_setting_from_files() {
+    local setting_name="$1"
+
+    awk -v key="${setting_name}" '
+        /^[[:space:]]*#/ { next }
+        NF >= 2 && tolower($1) == key {
+            value = $2
+        }
+        END {
+            if (value != "") {
+                print value
+            }
+        }
+    ' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null
+}
+
+read_sshd_effective_setting() {
+    local setting_name="$1"
+    local sshd_output=""
+    local setting_value=""
+
+    if command_exists sshd; then
+        sshd_output="$(sshd -T 2>/dev/null || true)"
+        if [[ -n "${sshd_output}" ]]; then
+            setting_value="$(awk -v key="${setting_name}" '$1 == key { $1=""; sub(/^ /, ""); print; exit }' <<< "${sshd_output}")"
+            if [[ -n "${setting_value}" ]]; then
+                printf '%s\n' "${setting_value}"
+                return 0
+            fi
+        fi
+    fi
+
+    read_sshd_setting_from_files "${setting_name}"
+}
+
 print_section() {
     echo
     echo "== $1 =="
@@ -114,21 +149,15 @@ detect_wg_port() {
 }
 
 detect_ssh_port() {
-    if command_exists sshd; then
-        sshd -T 2>/dev/null | awk '/^port / { print $2; exit }'
-    fi
+    read_sshd_effective_setting port
 }
 
 detect_password_auth() {
-    if command_exists sshd; then
-        sshd -T 2>/dev/null | awk '/^passwordauthentication / { print $2; exit }'
-    fi
+    read_sshd_effective_setting passwordauthentication
 }
 
 detect_allow_users() {
-    if command_exists sshd; then
-        sshd -T 2>/dev/null | awk '/^allowusers / { $1=""; sub(/^ /, ""); print; exit }'
-    fi
+    read_sshd_effective_setting allowusers
 }
 
 service_state() {
