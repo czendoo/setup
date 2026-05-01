@@ -64,9 +64,9 @@ prompt_password() {
 
     while true; do
         read -r -s -p "Enter the password for ${ADMIN_USER}: " first_password
-        echo
+        printf '\n' >&2
         read -r -s -p "Confirm the password for ${ADMIN_USER}: " second_password
-        echo
+        printf '\n' >&2
 
         if [[ -z "${first_password}" ]]; then
             echo "Password cannot be empty." >&2
