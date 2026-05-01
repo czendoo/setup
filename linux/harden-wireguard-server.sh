@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+set -Eeuo pipefail
+
+trap 'echo "ERROR: command failed at line ${LINENO}: ${BASH_COMMAND}" >&2' ERR
 
 usage() {
     cat <<'EOF'
@@ -222,6 +224,7 @@ prompt_password_for_user() {
 ensure_user_home_ssh_dir() {
     local user_name="$1"
     local home_dir
+    local primary_group
 
     home_dir="$(getent passwd "${user_name}" | cut -d: -f6)"
     if [[ -z "${home_dir}" ]]; then
@@ -229,13 +232,20 @@ ensure_user_home_ssh_dir() {
         exit 1
     fi
 
-    run_cmd install -d -m 0700 -o "${user_name}" -g "${user_name}" "${home_dir}/.ssh"
+    primary_group="$(id -gn "${user_name}")"
+    if [[ -z "${primary_group}" ]]; then
+        echo "Could not determine primary group for '${user_name}'." >&2
+        exit 1
+    fi
+
+    run_cmd install -d -m 0700 -o "${user_name}" -g "${primary_group}" "${home_dir}/.ssh"
     printf '%s\n' "${home_dir}"
 }
 
 merge_root_authorized_keys() {
     local user_name="$1"
     local home_dir="$2"
+    local primary_group=""
     local root_authorized_keys="/root/.ssh/authorized_keys"
     local target_authorized_keys="${home_dir}/.ssh/authorized_keys"
     local temp_file=""
@@ -257,7 +267,8 @@ merge_root_authorized_keys() {
     awk 'NF && !seen[$0]++' "${target_authorized_keys}" "${root_authorized_keys}" > "${temp_file}"
     mv "${temp_file}" "${target_authorized_keys}"
 
-    chown "${user_name}:${user_name}" "${target_authorized_keys}"
+    primary_group="$(id -gn "${user_name}")"
+    chown "${user_name}:${primary_group}" "${target_authorized_keys}"
 }
 
 create_admin_user() {
