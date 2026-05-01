@@ -238,7 +238,7 @@ merge_root_authorized_keys() {
     local home_dir="$2"
     local root_authorized_keys="/root/.ssh/authorized_keys"
     local target_authorized_keys="${home_dir}/.ssh/authorized_keys"
-    local line=""
+    local temp_file=""
 
     if [[ ! -f "${root_authorized_keys}" ]]; then
         echo "No ${root_authorized_keys} file found. Skipping SSH key copy."
@@ -253,12 +253,9 @@ merge_root_authorized_keys() {
     touch "${target_authorized_keys}"
     chmod 600 "${target_authorized_keys}"
 
-    while IFS= read -r line || [[ -n "${line}" ]]; do
-        [[ -n "${line}" ]] || continue
-        if ! grep -Fqx "${line}" "${target_authorized_keys}"; then
-            printf '%s\n' "${line}" >> "${target_authorized_keys}"
-        fi
-    done < "${root_authorized_keys}"
+    temp_file="$(mktemp)"
+    awk 'NF && !seen[$0]++' "${target_authorized_keys}" "${root_authorized_keys}" > "${temp_file}"
+    mv "${temp_file}" "${target_authorized_keys}"
 
     chown "${user_name}:${user_name}" "${target_authorized_keys}"
 }
