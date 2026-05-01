@@ -319,6 +319,32 @@ create_admin_user() {
     merge_root_authorized_keys "${user_name}" "${user_home}"
 }
 
+ensure_sudo_access() {
+    local user_name="$1"
+
+    if [[ "${user_name}" == "root" ]]; then
+        return 0
+    fi
+
+    if id -nG "${user_name}" | tr ' ' '\n' | grep -Fxq sudo; then
+        return 0
+    fi
+
+    echo "User '${user_name}' is not in the sudo group. Adding it now..."
+
+    if [[ "${DRY_RUN}" == true ]]; then
+        echo "DRY-RUN: apt-get update"
+        echo "DRY-RUN: apt-get install -y sudo"
+        echo "DRY-RUN: usermod -aG sudo ${user_name}"
+        return 0
+    fi
+
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get install -y sudo
+    usermod -aG sudo "${user_name}"
+}
+
 require_existing_user() {
     local user_name="$1"
 
@@ -557,6 +583,7 @@ if [[ -z "${ADMIN_USER}" ]]; then
     ADMIN_USER="$(prompt_required_value "Enter the SSH admin user to keep")"
 fi
 require_existing_user "${ADMIN_USER}"
+ensure_sudo_access "${ADMIN_USER}"
 require_authorized_keys "${ADMIN_USER}"
 
 if [[ -z "${SSH_PORT}" ]]; then
