@@ -350,12 +350,43 @@ require_authorized_keys() {
     fi
 }
 
-detect_ssh_port() {
-    if ! command -v sshd >/dev/null 2>&1; then
-        return 0
+read_sshd_setting_from_files() {
+    local setting_name="$1"
+
+    awk -v key="${setting_name}" '
+        /^[[:space:]]*#/ { next }
+        NF >= 2 && tolower($1) == key {
+            value = $2
+        }
+        END {
+            if (value != "") {
+                print value
+            }
+        }
+    ' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null
+}
+
+read_sshd_effective_setting() {
+    local setting_name="$1"
+    local sshd_output=""
+    local setting_value=""
+
+    if command -v sshd >/dev/null 2>&1; then
+        sshd_output="$(sshd -T 2>/dev/null || true)"
+        if [[ -n "${sshd_output}" ]]; then
+            setting_value="$(awk -v key="${setting_name}" '$1 == key { print $2; exit }' <<< "${sshd_output}")"
+            if [[ -n "${setting_value}" ]]; then
+                printf '%s\n' "${setting_value}"
+                return 0
+            fi
+        fi
     fi
 
-    sshd -T 2>/dev/null | awk '/^port / { print $2; exit }'
+    read_sshd_setting_from_files "${setting_name}"
+}
+
+detect_ssh_port() {
+    read_sshd_effective_setting port
 }
 
 detect_wg_interface() {
@@ -462,8 +493,9 @@ print_short_status() {
     local unattended_enabled="no"
     local journald_persistent="no"
 
-    if command -v sshd >/dev/null 2>&1; then
-        current_password_auth="$(sshd -T 2>/dev/null | awk '/^passwordauthentication / { print $2; exit }')"
+    current_password_auth="$(read_sshd_effective_setting passwordauthentication)"
+    if [[ -z "${current_password_auth}" ]]; then
+        current_password_auth="unknown"
     fi
 
     if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q '^Status: active'; then
