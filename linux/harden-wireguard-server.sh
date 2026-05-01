@@ -465,7 +465,7 @@ prompt_wg_port_confirmation() {
     local entered_port=""
 
     if [[ -n "${detected_port}" ]]; then
-        echo "Detected WireGuard UDP port: ${detected_port}"
+        echo "Detected WireGuard UDP port: ${detected_port}" >&2
         entered_port="$(prompt_required_value "Enter the preserved WireGuard UDP port")"
         if [[ "${entered_port}" != "${detected_port}" ]]; then
             echo "Entered WireGuard port does not match the detected active port." >&2
