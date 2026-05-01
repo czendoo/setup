@@ -106,15 +106,27 @@ case "\${ACTION}" in
     start)
         sysctl -w net.ipv4.ip_forward=1 >/dev/null
         ensure_rule nat PREROUTING -i "\${WG_INTERFACE}" -p tcp -d "\${WG_IP}" --dport "\${LISTEN_PORT}" -j DNAT --to-destination "\${WINDOWS_IP}:\${TARGET_PORT}"
+        ensure_rule nat PREROUTING -i "\${WG_INTERFACE}" -p udp -d "\${WG_IP}" --dport "\${LISTEN_PORT}" -j DNAT --to-destination "\${WINDOWS_IP}:\${TARGET_PORT}"
         ensure_rule nat POSTROUTING -o "\${LAN_INTERFACE}" -p tcp -d "\${WINDOWS_IP}" --dport "\${TARGET_PORT}" -j MASQUERADE
+        ensure_rule nat POSTROUTING -o "\${LAN_INTERFACE}" -p udp -d "\${WINDOWS_IP}" --dport "\${TARGET_PORT}" -j MASQUERADE
+        ensure_rule mangle FORWARD -p tcp -d "\${WINDOWS_IP}" --dport "\${TARGET_PORT}" --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+        ensure_rule mangle FORWARD -p tcp -s "\${WINDOWS_IP}" --sport "\${TARGET_PORT}" --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
         ensure_rule filter FORWARD -i "\${WG_INTERFACE}" -p tcp -d "\${WINDOWS_IP}" --dport "\${TARGET_PORT}" -j ACCEPT
+        ensure_rule filter FORWARD -i "\${WG_INTERFACE}" -p udp -d "\${WINDOWS_IP}" --dport "\${TARGET_PORT}" -j ACCEPT
         ensure_rule filter FORWARD -o "\${WG_INTERFACE}" -p tcp -s "\${WINDOWS_IP}" --sport "\${TARGET_PORT}" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+        ensure_rule filter FORWARD -o "\${WG_INTERFACE}" -p udp -s "\${WINDOWS_IP}" --sport "\${TARGET_PORT}" -j ACCEPT
         ;;
     stop)
         delete_rule nat PREROUTING -i "\${WG_INTERFACE}" -p tcp -d "\${WG_IP}" --dport "\${LISTEN_PORT}" -j DNAT --to-destination "\${WINDOWS_IP}:\${TARGET_PORT}"
+        delete_rule nat PREROUTING -i "\${WG_INTERFACE}" -p udp -d "\${WG_IP}" --dport "\${LISTEN_PORT}" -j DNAT --to-destination "\${WINDOWS_IP}:\${TARGET_PORT}"
         delete_rule nat POSTROUTING -o "\${LAN_INTERFACE}" -p tcp -d "\${WINDOWS_IP}" --dport "\${TARGET_PORT}" -j MASQUERADE
+        delete_rule nat POSTROUTING -o "\${LAN_INTERFACE}" -p udp -d "\${WINDOWS_IP}" --dport "\${TARGET_PORT}" -j MASQUERADE
+        delete_rule mangle FORWARD -p tcp -d "\${WINDOWS_IP}" --dport "\${TARGET_PORT}" --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+        delete_rule mangle FORWARD -p tcp -s "\${WINDOWS_IP}" --sport "\${TARGET_PORT}" --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
         delete_rule filter FORWARD -i "\${WG_INTERFACE}" -p tcp -d "\${WINDOWS_IP}" --dport "\${TARGET_PORT}" -j ACCEPT
+        delete_rule filter FORWARD -i "\${WG_INTERFACE}" -p udp -d "\${WINDOWS_IP}" --dport "\${TARGET_PORT}" -j ACCEPT
         delete_rule filter FORWARD -o "\${WG_INTERFACE}" -p tcp -s "\${WINDOWS_IP}" --sport "\${TARGET_PORT}" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+        delete_rule filter FORWARD -o "\${WG_INTERFACE}" -p udp -s "\${WINDOWS_IP}" --sport "\${TARGET_PORT}" -j ACCEPT
         ;;
     *)
         echo "Usage: \$0 [start|stop]" >&2
