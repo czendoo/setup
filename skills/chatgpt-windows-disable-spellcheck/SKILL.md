@@ -1,15 +1,15 @@
 ---
 name: chatgpt-windows-disable-spellcheck
-description: Use when a user wants to disable red spellcheck underlines in the ChatGPT Windows Desktop/Microsoft Store app, especially when Czech or other non-English text is underlined despite Windows and Edge spellcheck being disabled. This skill edits the ChatGPT app's local Preferences file to clear the spellcheck dictionaries. Do not use for browser ChatGPT, mobile apps, or unrelated spellcheck problems.
+description: Use when a user wants to disable red spellcheck underlines in the Codex or ChatGPT Windows/Microsoft Store app, especially when Czech or other non-English text is underlined despite Windows and Edge spellcheck being disabled. This skill clears the spellcheck dictionaries in every relevant app Preferences file. Do not use for browser ChatGPT, mobile apps, or unrelated spellcheck problems.
 ---
 
-# Disable spellcheck in the ChatGPT Windows app
+# Disable spellcheck in the Codex or ChatGPT Windows app
 
 ## Purpose
 
-The ChatGPT Windows Desktop/Microsoft Store app may keep its own Chromium/WebView-style `Preferences` file. Even when Windows typing settings and Microsoft Edge spellcheck are disabled, the app can still show red spellcheck underlines because a dictionary is configured inside this app-specific Preferences file.
+The current Codex Windows/Microsoft Store app (and the legacy ChatGPT Desktop app) may keep multiple Chromium/WebView-style `Preferences` files. Even when Windows typing settings and Microsoft Edge spellcheck are disabled, the app can still show red spellcheck underlines because a dictionary is configured in one or more of those files.
 
-The proven workaround is to clear the `dictionaries` entry in the ChatGPT Preferences file, changing for example:
+The proven workaround is to clear the `dictionaries` entry in **every** Codex or ChatGPT `Preferences` file that contains it, changing for example:
 
 ```json
 "dictionaries":["en-US"]
@@ -18,20 +18,20 @@ The proven workaround is to clear the `dictionaries` entry in the ChatGPT Prefer
 to:
 
 ```json
-"dictionaries":[""]
+"dictionaries":[]
 ```
 
-This disables spellchecking in the ChatGPT Windows app without changing global Windows or Edge settings.
+An empty list is required; do not replace the configured dictionary with an empty-string item such as `[""]`. This disables spellchecking in the Codex or ChatGPT Windows app without changing global Windows or Edge settings.
 
 ## When to use
 
 Use this skill when the user says any of the following:
 
 - ChatGPT Windows app underlines Czech, simplified English, or other text in red.
+- Codex Windows app underlines Czech, simplified English, or other text in red.
 - Windows spellcheck is already disabled but ChatGPT still underlines words.
 - Edge spellcheck is already disabled but ChatGPT still underlines words.
-- The Codex app or browser behaves correctly but ChatGPT Windows app does not.
-- The user wants to remove/disable spellcheck specifically in the ChatGPT Store/Desktop app.
+- The user wants to remove/disable spellcheck specifically in the Codex or ChatGPT Store/Desktop app.
 
 Do not use this skill for:
 
@@ -41,9 +41,15 @@ Do not use this skill for:
 
 ## Manual fix
 
-1. Completely close the ChatGPT app.
-2. Open Task Manager and end any remaining `ChatGPT` processes.
-3. Open this folder:
+1. Completely close the affected app.
+2. Open Task Manager and end any remaining `Codex` or `ChatGPT` processes.
+3. For the current Codex app, open this folder:
+
+```text
+%LOCALAPPDATA%\Packages\OpenAI.Codex_2p2nqsd0c76g0
+```
+
+For the legacy ChatGPT app, use:
 
 ```text
 %LOCALAPPDATA%\Packages\OpenAI.ChatGPT-Desktop_2p2nqsd0c76g0\LocalCache\Roaming\ChatGPT
@@ -55,17 +61,18 @@ If the exact package suffix differs, search under:
 %LOCALAPPDATA%\Packages
 ```
 
-for a folder matching:
+for folders matching either:
 
 ```text
+OpenAI.Codex_*
 OpenAI.ChatGPT-Desktop_*
 ```
 
-4. Find the file named `Preferences`.
-5. Make a backup copy, for example `Preferences.backup`.
-6. Open `Preferences` in Notepad, VS Code, or another text editor.
+4. Find **all** files named `Preferences` within the matching package folder, including ones in nested profiles or cache directories. Do not stop after the first result.
+5. For every `Preferences` file that contains `"dictionaries"`, make a backup copy, for example `Preferences.backup`.
+6. Open each of those files in Notepad, VS Code, or another text editor.
 7. Search for `"dictionaries"`.
-8. Change the configured dictionary to an empty string array. Example:
+8. Change each configured dictionary list to an empty array. Example:
 
 ```json
 "dictionaries":["en-US"]
@@ -74,15 +81,17 @@ OpenAI.ChatGPT-Desktop_*
 to:
 
 ```json
-"dictionaries":[""]
+"dictionaries":[]
 ```
 
-9. Save the file.
-10. Reopen ChatGPT and test by typing Czech or another previously underlined language.
+9. Save every edited file.
+10. Reopen the affected app and test by typing Czech or another previously underlined language.
 
 ## Scripted fix
 
-Prefer the bundled script when the user wants a repeatable method:
+Before using the bundled script, inspect its current behavior. It must discover and update **all** matching `Preferences` files, rather than selecting a single package or file. If it only updates one file, use the manual process above or update the script before relying on it.
+
+When a compatible version of the script is available, use:
 
 ```powershell
 .\scripts\disable-chatgpt-spellcheck.ps1
@@ -90,19 +99,12 @@ Prefer the bundled script when the user wants a repeatable method:
 
 The script:
 
-- closes ChatGPT,
-- finds the ChatGPT Desktop package folder,
-- backs up the `Preferences` file with a timestamp,
-- replaces the first `"dictionaries":[...]` entry with `"dictionaries":[""]`,
-- writes the updated Preferences file back.
-
-If the user wants to try an empty array instead of an empty string dictionary, run:
-
-```powershell
-.\scripts\disable-chatgpt-spellcheck.ps1 -UseEmptyArray
-```
-
-Use `-UseEmptyArray` only as a fallback. The known working forum workaround is `"dictionaries":[""]`.
+- closes the affected Codex or ChatGPT app,
+- finds every relevant Codex or ChatGPT `Preferences` file,
+- backs up every file it will change with a timestamp,
+- replaces each `"dictionaries":[...]` entry with `"dictionaries":[]`,
+- writes every updated Preferences file back, and
+- reports all paths it modified.
 
 ## Restore backup
 
@@ -116,8 +118,9 @@ This restores the latest timestamped backup created by the disable script.
 
 ## Troubleshooting
 
-- If the red underlines return after an app update, rerun the script.
-- If no `Preferences` file is found, ask the user to search under `%LOCALAPPDATA%\Packages` for `OpenAI.ChatGPT-Desktop_*` and confirm the installed package path.
+- If red underlines remain after the first pass, search the package folder again for additional `Preferences` files and make sure each `dictionaries` list is `[]`.
+- If the red underlines return after an app update, repeat the all-files process.
+- If no `Preferences` file is found, ask the user to search under `%LOCALAPPDATA%\Packages` for `OpenAI.Codex_*` (or, for the legacy app, `OpenAI.ChatGPT-Desktop_*`) and confirm the installed package path.
 - Do not recommend WebView2 flags such as `--disable-spell-checking` as a primary fix. They are not a reliable or documented solution for this app issue.
 - Do not keep changing Windows Typing or Edge settings once the user has confirmed those are already disabled.
 - Avoid making the `Preferences` file read-only unless the user explicitly asks for an aggressive workaround, because it may break unrelated ChatGPT app preferences.
